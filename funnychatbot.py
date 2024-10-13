@@ -14,7 +14,7 @@ client = AzureOpenAI(
   api_version="2023-03-15-preview"
 )
 #client.api_key =   os.getenv("OPENAI_API_KEY")
-# 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
+# ###
 # Set up the model and prompt
 LANGUAGE_MODEL = "gpt-4o"
 PROMPT_TEST = "This is a test prompt. Say this is a test"
