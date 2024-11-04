@@ -14,6 +14,7 @@ from langchain.embeddings.openai import OpenAIEmbeddings
 from langchain_openai import AzureOpenAIEmbeddings
 
 
+from langchain.document_loaders import DirectoryLoader
 from langchain.document_loaders import TextLoader
 from langchain.text_splitter import CharacterTextSplitter
 from langchain.vectorstores import Chroma
@@ -65,7 +66,9 @@ def process_query():
     # print(message)
     # load the document and split it into chunks
 
-    loader = TextLoader("./docs/faq.txt")
+    loader = DirectoryLoader('golang-30', use_multithreading=True, loader_cls=TextLoader)
+
+    #loader = TextLoader("./docs/faq.txt")
     documents = loader.load()
 
     # split it into chunks
