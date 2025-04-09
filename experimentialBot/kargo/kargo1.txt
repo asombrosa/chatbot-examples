@@ -1,0 +1,108 @@
+ 
+What is Kargo?
+KARgo is a tool which is used to capture data from a K8s cluster for offline debugging. This data can be logs, jaeger traces, grafana dashboards, prometheus metrics, etc. The collected data can be either extracted manually or be replayed on a local cluster on respective server instances from which it was collected. This page provides the basic information on how to collect and replay data.
+
+what are Components of kargo?
+Kargo collects data from the following components-
+Logging: Logs are collected from fed-elastic. Click for more details.
+Tracing: Traces are collected from fed-elastic. Click for more details.
+Metrics: Dashboards are collected from fed-grafana. The snapshot collected isn't readable and needs to be replayed. Click for more details.
+Kubectl: The output of certain kubectl commands is captured as part of this and the collected data is readable. Click for more details.
+Prometheus: Metrics are collected from prometheus database and they cannot be replayed. Click for more details.
+Etcd: Entire etcd dump is collected as part of this. The collected data needs to be replayed to get data in a readable format. Click for more details
+Alerts: Event based alerts are collected from elastic and metric based alerts are collected from prometheus and kube-prom. Click for more details.
+Kubeprom: Grafana dashboards are collected from kubeprom grafana instance and prometheus metrics from kubeprom prometheus instance are collected. The prometheus metrics cannot be replayed. Click for more details.
+Confd: Confd data is collected by running "show running-config" and couple of other commands inside cfgmgr pod of NF namespace. The response is captured in a json file. Click for details.
+Kclogs: Logs are collected by running "kubectl logs.." command inside each container and pod of the asked namespaces. Click for more details.
+Cluster: Commands are run and files are copied from all nodes of target cluster. This component is present in default profile of kube-system, not any other NF. Click for more details.
+Tenv: Tenv REST API commands are run inside the specified pods of the asked namespace. Click for more details.
+Redis: Commands are run in pod of fed-redis-cluster and this data is collected in a text file. Click for more details.
+Step by Step Guide to Operate KARgo using Automated Scripts
+
+How to collect data using kargo ?
+Running the script:
+The script kubectl-afn-kargo-collect  is present in the kargo pod. It can be copied from kargo pod to the cluster, using command-
+kc cp fed-paas-helpers/`kc -n fed-paas-helpers get pods | grep kargo | awk '{print $1}'`:kubectl-afn-kargo-collect kubectl-afn-kargo-collect
+After copying, please do run "chmod +x kubectl-afn-kargo-collect"
+If you are using an older version of kargo which does not have the script, please follow these steps to run it as a plugin- 
+Obtain the script kubectl-afn-kargo-collect from the repository vm-kc_plugins (vm-kc_plugins/interface/scripts). It can also be obtained from the release sever (http://repo/unitycloud/ ), the plugin is part of kc_plugins directory.
+Copy it to k8s master at a location included in $PATH, for example in /usr/local/bin directory.
+It can now be run as part of kubectl command like below.
+
+
+what the examples for collecting kargo?
+If start time is not specified, then kargo will collect data of last d minutes specified in duration. 
+Example: kubectl afn kargo collect -d 60 will collect data of last 60 minutes
+If duration is also not specified then kargo will collect data of last 30 minutes (default value of duration)
+Example: kubectl afn kargo collect will collect data of last 30 minutes
+After the collection, the tar file is copied to the path/directory where the script was running or to the path specified using -m flag.
+Examples of collection request: 
+Example: Default data collection (no flags): Collect all data
+The below command initiates data collection for last 30 mins and collects data of all components
+[maint@harshita-jha-tx-k8-master-1-rb582l-65rgo3xo9epqqlyy ~]$ ./kubectl-afn-kargo-collect
+
+
+
+what are the example of kargo replay?
+[harshita_jha@cni-builder-163-95-79 fed-kargo]$ cna kargo-replay -c 10.163.66.105 --tarfile Kargo-Data-09-30-2021_185011.tar.gz --local --log-filter fed-smf:smfcc:kafka-client:error
+No of logs matching given criteria/filter is: 54
+Local replay done. Filename: Kargo-Data-09-30-2021_185011
+[harshita_jha@cni-builder-163-95-79 fed-kargo]$ cd Kargo-Data-09-30-2021_185011
+[harshita_jha@cni-builder-163-95-79 Kargo-Data-09-30-2021_185011]$ ls
+elasticdump grafanadump  kubectldump  prometheusdump
+[harshita_jha@cni-builder-163-95-79 Kargo-Data-09-30-2021_185011]$ 
+[harshita_jha@cni-builder-163-95-79 Kargo-Data-09-30-2021_185011]$ cd elasticdump
+[harshita_jha@cni-builder-163-95-79 elasticdump]$ ls
+fluentd-event-paas-10-163-66-186-09-28-20-14-2021.09.30:09-30-2021_185014-sorted
+fluentd-mme-10-163-70-236-2021.09.30:09-30-2021_185018-sorted
+fluentd-paas-elastic-10-15-10-211-08-19-04-07-2021.09.30:09-30-2021_185016-sorted
+fluentd-paas--10-163-66-186-09-28-20-14-2021.09.30:09-30-2021_185021-sorted
+fluentd-paas-kibana-10-15-10-211-08-19-04-53-2021.09.30:09-30-2021_185012-sorted
+fed-smf-smfcc-kafka-client-error.log
+[harshita_jha@cni-builder-163-95-79 elasticdump]$ cd ../..
+[harshita_jha@cni-builder-163-95-79 fed-kargo]$ cna kargo-replay -c 10.163.66.105 --inputfile Kargo-Data-09-28-2021_090857.tar.gz -l -g :::warning
+No of logs matching given criteria/filter is: 37
+Local replay done. Filename: Kargo-Data-09-30-2021_185011
+[harshita_jha@cni-builder-163-95-79 fed-kargo]$ 
+ 
+How to manually apply the data?
+Manually Analyzing the Collected Data
+In many scenarios, replay of the collected data on the server instances is not required, only some basic functions are needed. In such cases, the unix/shell commands described below can be used for analyzing data.
+Please note that etcd data stored in etcddump folder is not in human readable format and must be replayed.
+Extraction of tar-file
+Make a directory in which all the contents of the tar file have to be transferred.
+Run the command tar -C <directory_name> -xzvf <tar_file_name>
+This will put all the contents of the tar-file, i.e. the grafanadump, kubectldump, elasticdump, kibanadump, jaegerdump  folders in the directory.
+Example:
+[maint@harshita-jha-tx-k8-master-1-rb582l-65rgo3xo9epqqlyy ~]$ mkdir tar-file
+[maint@harshita-jha-tx-k8-master-1-rb582l-65rgo3xo9epqqlyy ~]$ tar -C tar-file -xzvf Kargo-Data-05-31-2021_210822.tar.gz
+[maint@harshita-jha-tx-k8-master-1-rb582l-65rgo3xo9epqqlyy ~]$ cd tar-file
+[maint@harshita-jha-tx-k8-master-1-rb582l-65rgo3xo9epqqlyy tar_file]$ ls
+elasticdump  grafanadump  jaegerdump  kibanadump  kubectldump prometheusdump  
+Elastic Data
+The elasticdump folder contains files which contain the logs. Each file contains the logs of a particular index on elastic.
+[maint@harshita-jha-tx-k8-master-1-rb582l-65rgo3xo9epqqlyy ~]$ cd tar-dir/elasticdump
+[maint@harshita-jha-tx-k8-master-1-rb582l-65rgo3xo9epqqlyy elasticdump]$ ls
+fluentd-event-example-harshita-jha-10-163-66-106-06-08-21-34-2021.06.08:06-08-2021_225806
+fluentd-example-harshita-jha-10-163-66-106-06-08-21-34-2021.06.08:06-08-2021_225805
+[maint@harshita-jha-tx-k8-master-1-rb582l-65rgo3xo9epqqlyy elasticdump]$
+
+
+
+what are thelimitation of kargo?  
+Kargo will not replay kubectl commands
+It can be observed that there is a file corresponding to each index in elastic. Each NF federation has two indices, the first one begins with "fluentd-NF" and the second one begins with "fluentd-event-NF".
+
+
+how to use cna to replay kargo?
+[harshita_jha@cni-builder-163-95-79 fed-kargo]$ cna kargo-replay -c 10.163.66.105 --tarfile Kargo-Data-11-18-2021_080734.tar.gz --nodeploy --components etcd,metrics 
+Example-5: Extraction of data from tarfile (--local): 
+If the requirement is to only extract and view the data from the tarfile, then it can be done via the --local flag. After extraction, the data is stored in a file which has the same name as the tar-file. The elastic logs are sorted by timestamp. Users may specify filters for the log files via the --log-filter or -g flag.  The filter must be in the format/order namespace-name:pod-name:container-name:keyword. The order must be maintained. Also, the namespace/pod/container name specified in the filter should either be the exact name or the starting characters of the exact name. Filtering based on tokens are not supported. However, for the keyword, anything can be specified.  If local replay is repeated with a new filter, then a new file which has logs based on the conditions provided is created and stored in the same folder. The existing files aren't deleted. 
+In the example below, the logs are first filtered based on namespace fed-smf, pod-name beginning with smfcc, container-name beginning with kafka-client and each of them having the keyword "error" first. Then, they are filtered only on the basis of keyword warning.
+
+
+how to Troubleshoot the kargo pod?
+If kargo pod is in pending state , check for pvc if it is Bound or not.
+Check for resources if sufficient CPU's are there or not.
+
+

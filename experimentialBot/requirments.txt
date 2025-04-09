@@ -1,0 +1,12 @@
+chromadb
+colorama
+langchain
+openai
+python-dateutil
+python-dotenv
+requests
+tiktoken
+langchain_community
+langchain-openai
+langchain_core
+langchain_chroma
