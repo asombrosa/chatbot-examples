@@ -36,7 +36,7 @@ embeddings = AzureOpenAIEmbeddings(
 
 os.environ["AZURE_OPENAI_API_KEY"]
 model = AzureChatOpenAI(
-    azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
+    azure_endpoint="https://pk-1.openai.azure.com/openai/deployments/gpt-4o/chat/completions?api-version=2025-01-01-preview",
     azure_deployment="gpt-4",
     openai_api_version="2023-05-15"
 )
@@ -75,7 +75,7 @@ def process_query():
 def create_rag_chain(retriever):
     # Create the system and human message templates
     system_message_prompt = SystemMessagePromptTemplate.from_template(system_prompt)
-    human_message_prompt = HumanMessagePromptTemplate.from_template("{question}")
+    human_message_prompt = HumanMessagePromptTemplate.from_template("{input}")
     
     # Create a chat prompt template
     chat_prompt = ChatPromptTemplate.from_messages([
@@ -113,16 +113,70 @@ if __name__ == "__main__":
             if user_query.lower() == 'x':
                 break
                 
-            # Execute the RAG chain
-            result = rag_chain.invoke({"question": user_query})
+            try:
+                # Execute the RAG chain with the correct key name 'input' instead of 'question'
+                result = rag_chain.invoke({"input": user_query})
+                
+                # Print the answer
+                if "answer" in result:
+                    print(Fore.CYAN + "Bot: " + Fore.RESET + result["answer"])
+                else:
+                    print(Fore.RED + "Error: No answer found in the result" + Fore.RESET)
+                    print("Available keys:", list(result.keys()))
+                
+                # Print sources with error handling
+                print(Fore.YELLOW + "\nSources:" + Fore.RESET)
+                if "context" in result and result["context"]:
+                    for i, doc in enumerate(result["context"]):
+                        if hasattr(doc, 'page_content'):
+                            print(f"{i+1}. {doc.page_content[:100]}...")
+                        else:
+                            print(f"{i+1}. [Document format not recognized]")
+                else:
+                    docs = retriever.get_relevant_documents(user_query)
+                    if docs:
+                        print("Retrieved documents directly from retriever:")
+                        for i, doc in enumerate(docs[:3]):
+                            print(f"{i+1}. {doc.page_content[:100]}...")
+                    else:
+                        print("No relevant documents found for this query.")
+                
+                # Add to chat history
+                messages.append({"role": "user", "content": user_query})
+                messages.append({"role": "assistant", "content": result.get("answer", "Error retrieving answer")})
             
-            # Print the answer and the source documents for transparency
-            print(Fore.CYAN + "Bot: " + Fore.RESET + result["answer"])
-            print(Fore.YELLOW + "\nSources:" + Fore.RESET)
-            for i, doc in enumerate(result.get("context", [])):
-                print(f"{i+1}. {doc.page_content[:100]}...")
-            
-            # Add to chat history
-            messages.append({"role": "user", "content": user_query})
-            messages.append({"role": "assistant", "content": result["answer"]})
+            except Exception as e:
+                print(Fore.RED + f"Error processing query: {str(e)}" + Fore.RESET)
+                import traceback
+                traceback.print_exc()
+                
+                # Fallback to direct retrieval and response
+                print(Fore.YELLOW + "Attempting fallback response..." + Fore.RESET)
+                try:
+                    # Get documents directly
+                    docs = retriever.get_relevant_documents(user_query)
+                    if docs:
+                        context = "\n\n".join([doc.page_content for doc in docs[:3]])
+                        fallback_prompt = f"""Based on this information:
+                        {context}
+                        
+                        Answer this question: {user_query}"""
+                        
+                        # Use the model instead of direct client calls
+                        result = model.invoke(fallback_prompt)
+                        answer = result.content if hasattr(result, "content") else str(result)
+                        print(Fore.CYAN + "Bot: " + Fore.RESET + answer)
+                    else:
+                        print("No relevant documents found for this query.")
+                except Exception as fallback_error:
+                    print(Fore.RED + f"Fallback also failed: {str(fallback_error)}" + Fore.RESET)
+                    
+                    # Add a final direct fallback using the model
+                    try:
+                        print(Fore.YELLOW + "Attempting direct model query..." + Fore.RESET)
+                        direct_result = model.invoke(user_query)
+                        direct_answer = direct_result.content if hasattr(direct_result, "content") else str(direct_result)
+                        print(Fore.CYAN + "Bot: " + Fore.RESET + direct_answer)
+                    except Exception as direct_error:
+                        print(Fore.RED + f"All fallbacks failed: {str(direct_error)}" + Fore.RESET)
 
